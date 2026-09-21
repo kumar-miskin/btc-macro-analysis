@@ -1,0 +1,13 @@
+{
+  "x_post_url": "https://x.com/KumarMiskin/status/2100421222945419645",
+  "generated_at": "2026-09-16T20:15:00-07:00",
+  "chart_file": "2_etf_flows.png",
+  "source": "Farside Investors",
+  "source_retrieval_url": "https://r.jina.ai/https://farside.co.uk/bitcoin-etf-flow-all-data/",
+  "source_page": "https://farside.co.uk/bitcoin-etf-flow-all-data/",
+  "units": "USD millions",
+  "posted_claims": {
+    "last_week_net_flow_usd_millions": -442,
+    "cumulative_since_launch_usd_billions": 54.8
+  }
+}
