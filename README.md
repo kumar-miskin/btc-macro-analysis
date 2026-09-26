@@ -28,7 +28,7 @@ python charts/<folder>/chart.py
 
 `btcmacro/farside.py` parses Farside's ETF flow table and aggregates it into weeks. By default `weekly_totals` drops the last week unless the data reaches its Friday, so a "last week" number is never a week-to-date sum. `pending_funds` lists funds with no figure yet on the latest day, which makes that day's Total provisional.
 
-`scripts/verify_claims.py` recomputes the numbers listed under `posted_claims` in each chart's `manifest.json` from the committed CSVs. It fails on a mismatch and warns when a figure rests on a partial week or a day with funds still pending. CI runs it on every push along with the tests:
+`scripts/verify_claims.py` recomputes the numbers listed under `posted_claims` in each chart's `manifest.json` from the committed CSVs. It also recomputes each weekly total from the daily CSV before trusting a weekly claim, so edits to a derived weekly CSV cannot make an incorrect claim appear valid. It fails on a mismatch and warns when a figure rests on a partial week or a day with funds still pending. CI runs it on every push along with the tests:
 
 ```
 pip install -r requirements.txt pytest
