@@ -15,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from btcmacro.farside import pending_funds, week_is_complete  # noqa: E402
+from btcmacro.farside import pending_funds, week_is_complete, weekly_totals  # noqa: E402
 
 
 def check_etf_flows(folder: Path, claims: dict) -> tuple[list[str], list[str]]:
@@ -24,6 +24,28 @@ def check_etf_flows(folder: Path, claims: dict) -> tuple[list[str], list[str]]:
     weekly = pd.read_csv(folder / "data" / "etf_weekly_flows.csv", parse_dates=["date"]).set_index("date").iloc[:, 0]
     cum = pd.read_csv(folder / "data" / "etf_cumulative_flows.csv", parse_dates=["date"]).set_index("date").iloc[:, 0]
 
+    # The weekly file is derived data, not independent evidence. Verify every
+    # committed bucket against the daily source before trusting a posted claim.
+    recomputed_weekly = weekly_totals(daily["Total"], complete_only=False)
+    if weekly.index.has_duplicates:
+        errors.append("weekly CSV contains duplicate week-end dates")
+    if not weekly.index.equals(recomputed_weekly.index):
+        missing = recomputed_weekly.index.difference(weekly.index)
+        extra = weekly.index.difference(recomputed_weekly.index)
+        errors.append(
+            "weekly CSV week endings differ from daily totals"
+            f" (missing: {missing.strftime('%Y-%m-%d').tolist()},"
+            f" extra: {extra.strftime('%Y-%m-%d').tolist()})"
+        )
+    else:
+        mismatch = weekly.isna() | recomputed_weekly.isna() | (weekly - recomputed_weekly).abs().gt(0.05)
+        if mismatch.any():
+            week = mismatch[mismatch].index[0]
+            errors.append(
+                f"weekly CSV {week:%Y-%m-%d}: {weekly.loc[week]:.1f},"
+                f" daily totals sum to {recomputed_weekly.loc[week]:.1f}"
+            )
+
     recomputed_cum = daily["Total"].fillna(0).cumsum()
     if abs(recomputed_cum.iloc[-1] - cum.iloc[-1]) > 0.05:
         errors.append(f"cumulative CSV ends at {cum.iloc[-1]:.1f}, daily totals sum to {recomputed_cum.iloc[-1]:.1f}")
@@ -31,8 +53,12 @@ def check_etf_flows(folder: Path, claims: dict) -> tuple[list[str], list[str]]:
     if "last_week_net_flow_usd_millions" in claims:
         posted = claims["last_week_net_flow_usd_millions"]
         wk_end, wk = weekly.index[-1], weekly.iloc[-1]
-        if round(wk) != posted:
-            errors.append(f"last_week_net_flow: posted {posted}, data gives {wk:.1f}")
+        if not weekly.index.has_duplicates and wk_end in recomputed_weekly.index:
+            verified_week = recomputed_weekly.loc[wk_end]
+            if round(verified_week) != posted:
+                errors.append(f"last_week_net_flow: posted {posted}, daily data gives {verified_week:.1f}")
+        elif not weekly.index.has_duplicates:
+            errors.append(f"last_week_net_flow: week ending {wk_end:%Y-%m-%d} not in daily data")
         if not week_is_complete(daily["Total"], wk_end):
             days = daily.loc[wk_end - pd.Timedelta(days=6):wk_end].index
             warnings.append(
