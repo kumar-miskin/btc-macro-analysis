@@ -53,3 +53,26 @@ def test_missing_week_or_duplicate_week_is_rejected(tmp_path):
     pd.concat([original, original.iloc[[4]]], ignore_index=True).to_csv(weekly_path, index=False)
     errors, _ = verify_claims.verify(folder)
     assert any("duplicate week-end" in error for error in errors)
+
+
+def test_mid_series_cumulative_error_is_not_hidden_by_correct_final_row(tmp_path):
+    import pandas as pd
+    folder = tmp_path / CHART.name
+    shutil.copytree(CHART, folder)
+    path = folder / "data" / "etf_cumulative_flows.csv"
+    frame = pd.read_csv(path)
+    frame.iloc[10, 1] += 100
+    frame.to_csv(path, index=False)
+    errors, _ = verify_claims.verify(folder)
+    assert any("cumulative CSV" in e and "daily totals sum" in e for e in errors)
+
+
+def test_cumulative_missing_date_is_rejected(tmp_path):
+    import pandas as pd
+    folder = tmp_path / CHART.name
+    shutil.copytree(CHART, folder)
+    path = folder / "data" / "etf_cumulative_flows.csv"
+    frame = pd.read_csv(path)
+    frame.drop(index=10).to_csv(path, index=False)
+    errors, _ = verify_claims.verify(folder)
+    assert any("cumulative CSV dates differ" in e for e in errors)

@@ -46,9 +46,31 @@ def check_etf_flows(folder: Path, claims: dict) -> tuple[list[str], list[str]]:
                 f" daily totals sum to {recomputed_weekly.loc[week]:.1f}"
             )
 
+    # Check the *entire* derived cumulative path. An end-only check misses a
+    # mid-history edit that is reversed before the latest row, yet a chart may
+    # still have quoted that altered point.
+    if daily.index.has_duplicates:
+        errors.append("daily CSV contains duplicate dates")
+    if cum.index.has_duplicates:
+        errors.append("cumulative CSV contains duplicate dates")
     recomputed_cum = daily["Total"].fillna(0).cumsum()
-    if abs(recomputed_cum.iloc[-1] - cum.iloc[-1]) > 0.05:
-        errors.append(f"cumulative CSV ends at {cum.iloc[-1]:.1f}, daily totals sum to {recomputed_cum.iloc[-1]:.1f}")
+    if not cum.index.equals(recomputed_cum.index):
+        missing = recomputed_cum.index.difference(cum.index)
+        extra = cum.index.difference(recomputed_cum.index)
+        errors.append(
+            "cumulative CSV dates differ from daily totals"
+            f" (missing: {missing.strftime('%Y-%m-%d').tolist()},"
+            f" extra: {extra.strftime('%Y-%m-%d').tolist()})"
+        )
+    else:
+        mismatch = cum.isna() | recomputed_cum.isna() | (cum - recomputed_cum).abs().gt(0.05)
+        if mismatch.any():
+            day = mismatch[mismatch].index[0]
+            errors.append(
+                f"cumulative CSV {day:%Y-%m-%d}: {cum.loc[day]:.1f},"
+                f" daily totals sum to {recomputed_cum.loc[day]:.1f}"
+            )
+
 
     if "last_week_net_flow_usd_millions" in claims:
         posted = claims["last_week_net_flow_usd_millions"]
